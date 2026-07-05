@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Medly — Entretiens Patients</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #f5f7f8;
+  color: #1c2b2a;
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 20px 20px 60px; }
+header.app-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 18px; flex-wrap: wrap;
+}
+header.app-header h1 { font-size: 20px; margin: 0; color: #0f5c57; }
+header.app-header p { margin: 2px 0 0; font-size: 12.5px; color: #607873; }
+.tabs { display: flex; gap: 6px; background: #e7edec; padding: 4px; border-radius: 10px; }
+.tabs button {
+  border: none; background: transparent; padding: 8px 16px; border-radius: 8px;
+  font-size: 13.5px; font-weight: 600; color: #4a5f5b; cursor: pointer;
+}
+.tabs button.active { background: #0f5c57; color: #fff; }
+.card {
+  background: #fff; border: 1px solid #e3e8e7; border-radius: 14px;
+  padding: 20px 22px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(15,92,87,0.04);
+}
+.card h2 { font-size: 15px; margin: 0 0 4px; color: #0f5c57; }
+.card .sub { font-size: 12px; color: #7c8f8b; margin: 0 0 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 700px) { .grid2, .grid4 { grid-template-columns: 1fr; } }
+label { display: block; font-size: 12.5px; font-weight: 600; color: #3d5450; margin-bottom: 4px; }
+input[type=text], input[type=date], input[type=number], select, textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid #d7dedc; border-radius: 8px;
+  font-size: 13.5px; font-family: inherit; background: #fcfdfd; color: #1c2b2a;
+}
+textarea { min-height: 56px; resize: vertical; }
+.field { margin-bottom: 12px; }
+.q-block { border-left: 3px solid #cfe3e0; padding-left: 12px; margin-bottom: 14px; }
+.q-label { font-size: 13px; font-weight: 700; color: #0f5c57; margin-bottom: 4px; }
+.relances { font-size: 11.5px; color: #8a9c98; margin: 2px 0 6px; font-style: italic; }
+.part-title {
+  font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: #fff; background: #0f5c57; display: inline-block; padding: 4px 10px; border-radius: 6px;
+  margin: 18px 0 12px;
+}
+.part-title:first-child { margin-top: 0; }
+.scale-row { display: flex; align-items: center; gap: 10px; }
+.scale-row input[type=range] { flex: 1; }
+.scale-val { font-weight: 700; color: #0f5c57; min-width: 18px; text-align: center; }
+button.primary {
+  background: #0f5c57; color: #fff; border: none; padding: 10px 20px; border-radius: 9px;
+  font-size: 13.5px; font-weight: 700; cursor: pointer;
+}
+button.primary:hover { background: #0c4a46; }
+button.secondary {
+  background: #fff; color: #0f5c57; border: 1px solid #0f5c57; padding: 9px 16px; border-radius: 9px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+button.danger { background: #fff; color: #b0433a; border: 1px solid #e3b3ad; padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+.stat-card { background: #f2f7f6; border-radius: 12px; padding: 12px 14px; text-align: center; }
+.stat-card .num { font-size: 22px; font-weight: 800; color: #0f5c57; }
+.stat-card .lbl { font-size: 11px; color: #6c837e; margin-top: 2px; }
+table.list { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.list th, table.list td { text-align: left; padding: 8px 8px; border-bottom: 1px solid #edf1f0; }
+table.list th { color: #6c837e; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+table.list tr:hover { background: #f7faf9; cursor: pointer; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.badge.oui { background: #dff3ea; color: #157a52; }
+.badge.non { background: #fbe6e4; color: #b0433a; }
+.badge.pe { background: #fff3d9; color: #9a6d00; }
+.empty { text-align: center; padding: 40px 20px; color: #8a9c98; font-size: 13px; }
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: #0f5c57; color: #fff; padding: 10px 20px; border-radius: 10px;
+  font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,0.15); z-index: 50; opacity: 0;
+  transition: opacity .25s ease; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+.modal-bg {
+  display: none; position: fixed; inset: 0; background: rgba(15,30,28,0.4);
+  align-items: center; justify-content: center; z-index: 100; padding: 20px;
+}
+.modal-bg.show { display: flex; }
+.modal { background: #fff; border-radius: 14px; max-width: 640px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 22px 24px; }
+.modal h3 { margin: 0 0 4px; color: #0f5c57; }
+.modal .sub { font-size: 12px; color: #7c8f8b; margin-bottom: 16px; }
+.modal .qa { margin-bottom: 10px; }
+.modal .qa .q { font-weight: 700; font-size: 12.5px; color: #3d5450; }
+.modal .qa .a { font-size: 13px; color: #1c2b2a; white-space: pre-wrap; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.chart-wrap { height: 240px; position: relative; }
+.footer-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+.help { font-size: 11.5px; color: #8a9c98; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="app-header">
+    <div>
+      <h1>Medly — Saisie des entretiens patients</h1>
+      <p>Basé sur le guide « Entretien patients v1.0 » — recherche qualitative Medly</p>
+    </div>
+    <div class="tabs">
+      <button id="tab-btn-form" class="active">Nouvel entretien</button>
+      <button id="tab-btn-dash">Dashboard</button>
+    </div>
+  </header>
+
+  <!-- ===================== FORM TAB ===================== -->
+  <div id="tab-form">
+
+    <div class="card">
+      <h2>Informations générales</h2>
+      <p class="sub">Durée indicative 40–50 min · Présentiel ou visio · Enregistrement avec accord</p>
+      <div class="grid4">
+        <div class="field">
+          <label>Identifiant patient (anonymisé)</label>
+          <input type="text" id="f_patient_id" placeholder="ex: P-014">
+        </div>
+        <div class="field">
+          <label>Date de l'entretien</label>
+          <input type="date" id="f_date">
+        </div>
+        <div class="field">
+          <label>Enquêteur</label>
+          <input type="text" id="f_enqueteur" placeholder="Prénom Nom">
+        </div>
+        <div class="field">
+          <label>Mode</label>
+          <select id="f_mode">
+            <option value="Présentiel">Présentiel</option>
+            <option value="Visio">Visio</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="questions-card">
+      <h2>Guide d'entretien</h2>
+      <p class="sub">Ne jamais mentionner l'appli avant Q15 · Reformuler sans interpréter · Relancer les oui/non · Noter hésitations et silences</p>
+      <div id="questions-container"></div>
+    </div>
+
+    <div class="card">
+      <h2>Grille de clôture</h2>
+      <p class="sub">À remplir juste après l'entretien</p>
+      <div class="grid2">
+        <div class="field">
+          <label>Niveau de frustration avec la gestion actuelle</label>
+          <div class="scale-row"><input type="range" min="1" max="5" value="3" id="f_frustration"><span class="scale-val" id="v_frustration">3</span></div>
+        </div>
+        <div class="field">
+          <label>Désir spontané de l'application</label>
+          <div class="scale-row"><input type="range" min="1" max="5" value="3" id="f_desir"><span class="scale-val" id="v_desir">3</span></div>
+        </div>
+        <div class="field">
+          <label>Fiabilité perçue des données</label>
+          <div class="scale-row"><input type="range" min="1" max="5" value="3" id="f_fiabilite"><span class="scale-val" id="v_fiabilite">3</span></div>
+        </div>
+        <div class="field">
+          <label>Disposé(e) à être beta-testeur ?</label>
+          <select id="f_betatest">
+            <option value="Oui">Oui</option>
+            <option value="Non">Non</option>
+            <option value="Peut-être">Peut-être</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Observations libres</label>
+        <textarea id="f_observations" placeholder="Hésitations, silences, réactions non-verbales..."></textarea>
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <button class="secondary" id="btn-clear-form">Vider le formulaire</button>
+      <button class="primary" id="btn-save">Enregistrer l'entretien</button>
+    </div>
+  </div>
+
+  <!-- ===================== DASHBOARD TAB ===================== -->
+  <div id="tab-dash" style="display:none;">
+
+    <div class="card">
+      <div class="grid4" id="stats-row"></div>
+    </div>
+
+    <div class="card">
+      <h2>Scores moyens</h2>
+      <div class="chart-wrap"><canvas id="chart-avg"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2>Entretiens enregistrés</h2>
+          <p class="sub">Cliquer une ligne pour voir le détail complet</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="secondary" id="btn-export-sheet">Exporter vers Google Sheet</button>
+          <button class="danger" id="btn-reset-all">Tout effacer</button>
+        </div>
+      </div>
+      <div id="table-container"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3 id="modal-title">Entretien</h3>
+    <p class="sub" id="modal-sub"></p>
+    <div id="modal-body"></div>
+    <div class="modal-actions">
+      <button class="danger" id="modal-delete">Supprimer cet entretien</button>
+      <button class="secondary" id="modal-close">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+
+const STORAGE_KEY = 'medly_entretiens_patients_v1';
+
+const QUESTIONS = [
+  { part: "Partie 1 — Échauffement & profil (5 min)", items: [
+    { id: 'q1', label: "Q1 — Pouvez-vous me décrire votre situation de santé au quotidien, en termes de médicaments ?", relances: "Combien de médicaments prenez-vous régulièrement ? Depuis combien de temps ? Qui les prescrit ?" },
+    { id: 'q2', label: "Q2 — Comment vous organisez-vous pour ne pas oublier de prendre vos médicaments ?", relances: "Alarmes, pilulier ? Aide de l'entourage ? Noter les outils cités spontanément." },
+  ]},
+  { part: "Partie 2 — Armoire à pharmacie (10 min)", items: [
+    { id: 'q3', label: "Q3 — Comment est organisée votre armoire à pharmacie ou votre stock de médicaments chez vous ?", relances: "Quelle pièce ? Savez-vous ce qu'il y a dedans ? Qui d'autre y a accès ?" },
+    { id: 'q4', label: "Q4 — Quand vous avez besoin d'un médicament, comment vous y prenez-vous pour savoir si vous en avez déjà à la maison ?", relances: "Vérification physique ou mémoire ? Racheter quelque chose déjà possédé ?" },
+    { id: 'q5', label: "Q5 — Avez-vous déjà pris un médicament périmé, même sans le savoir ou en vous disant que c'était « pas grave » ?", relances: "Dans quelle situation ? Ce qui a amené à le prendre quand même. (Question sensible — ton bienveillant)" },
+    { id: 'q6', label: "Q6 — Que faites-vous des médicaments périmés ou non utilisés ?", relances: "Gardés ? Jetés ? Rapportés en pharmacie ? Depuis combien de temps traînent-ils ?" },
+    { id: 'q7', label: "Q7 — Avez-vous une idée de la valeur des médicaments que vous avez chez vous en ce moment ?", relances: "Jamais estimé ? Est-ce que ça vous préoccupe ?" },
+  ]},
+  { part: "Partie 3 — Ordonnances & pharmacien (10 min)", items: [
+    { id: 'q8', label: "Q8 — Quand vous arrivez à la pharmacie avec une ordonnance, est-ce qu'il vous arrive de penser « mais j'ai peut-être encore ça chez moi » ?", relances: "Ça arrive souvent ? Que faites-vous dans ce cas ? Vous en parlez au pharmacien ?" },
+    { id: 'q9', label: "Q9 — Est-ce que votre pharmacien sait ce que vous avez chez vous en médicaments ?", relances: "Il vous pose des questions là-dessus ? Vous lui faites confiance pour ça ?" },
+    { id: 'q10', label: "Q10 — Avez-vous déjà eu un problème lié à une interaction entre médicaments — prescrit + en automédication ?", relances: "Le pharmacien vous en a parlé ? Vous avez trouvé l'information vous-même ?" },
+    { id: 'q11', label: "Q11 — Comment vous informez-vous sur vos médicaments — effets, dosages, précautions ?", relances: "Notice, internet, médecin, pharmacien ? Facile de trouver une réponse fiable ?" },
+  ]},
+  { part: "Partie 4 — Rapport au numérique & santé (5 min)", items: [
+    { id: 'q12', label: "Q12 — Est-ce que vous utilisez des applications sur votre téléphone pour votre santé ?", relances: "Lesquelles ? Encore utilisées ? Pourquoi arrêté ou continué ?" },
+    { id: 'q13', label: "Q13 — Est-ce que vous seriez à l'aise pour stocker des informations sur vos médicaments dans une application ?", relances: "Qu'est-ce qui ferait hésiter ? Quelles garanties souhaitées ?" },
+  ]},
+  { part: "Partie 5 — Test concept (10 min)", items: [
+    { id: 'concept_intro', label: "Présentation du concept (à lire avant Q14) : « Imaginez une application qui scanne les médicaments de votre armoire avec les codes-barres, vous alerte quand un médicament va périmer ou quand une ordonnance vous permettrait d'utiliser ce que vous avez déjà, et communique avec votre pharmacien. »", relances: "", isNote: true },
+    { id: 'q14', label: "Q14 — Quelle est votre première réaction à cette idée ?", relances: "Qu'est-ce qui plaît ? Qu'est-ce qui pose question ou inquiète ?" },
+    { id: 'q15', label: "Q15 — Dans votre quotidien, dans quelle situation est-ce que cette application vous serait vraiment utile ?", relances: "Exemple concret ? Besoin fréquent ou rare ?" },
+    { id: 'q16', label: "Q16 — Qui d'autre dans votre entourage pourrait bénéficier de cette application ?", relances: "Personnes âgées ? Parents avec enfants ? Penseriez-vous à leur en parler ?" },
+    { id: 'q17', label: "Q17 — Est-ce que vous utiliseriez cette application si elle était gratuite pour vous ?", relances: "Pourquoi ou pourquoi pas ? Qu'est-ce qui ferait l'utiliser régulièrement ?" },
+    { id: 'q18', label: "Q18 — Qu'est-ce qui pourrait vous faire arrêter de l'utiliser après quelques semaines ?", relances: "Trop de notifications ? Trop compliqué ? Pas utile en pratique ?" },
+    { id: 'q19', label: "Q19 — Si cette application vous envoyait un message de votre pharmacien, vous lui répondriez ?", relances: "Dans quelles situations ? Appel, en personne, ou message suffit ?" },
+  ]},
+  { part: "Partie 6 — Clôture (5 min)", items: [
+    { id: 'q20', label: "Q20 — Y a-t-il quelque chose sur votre façon de gérer vos médicaments dont on n'a pas parlé et que vous trouvez important ?", relances: "Question ouverte finale — ne pas relancer avec des thèmes, laisser le silence travailler." },
+  ]},
+];
+
+// ---------- render question form ----------
+const container = document.getElementById('questions-container');
+QUESTIONS.forEach(section => {
+  const h = document.createElement('div');
+  h.className = 'part-title';
+  h.textContent = section.part;
+  container.appendChild(h);
+  section.items.forEach(q => {
+    const block = document.createElement('div');
+    block.className = 'q-block';
+    if (q.isNote) {
+      block.innerHTML = `<div class="q-label">${q.label}</div>`;
+    } else {
+      block.innerHTML = `
+        <div class="q-label">${q.label}</div>
+        ${q.relances ? `<div class="relances">Relances : ${q.relances}</div>` : ''}
+        <textarea id="${q.id}" placeholder="Réponse du patient..."></textarea>
+      `;
+    }
+    container.appendChild(block);
+  });
+});
+
+// ---------- scale sliders live value ----------
+['frustration','desir','fiabilite'].forEach(k => {
+  const el = document.getElementById('f_'+k);
+  const out = document.getElementById('v_'+k);
+  el.addEventListener('input', () => out.textContent = el.value);
+});
+
+// default date = today
+document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+
+// ---------- storage helpers ----------
+function loadAll() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch(e) { return []; }
+}
+function saveAll(list) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---------- collect all question ids (excluding notes) ----------
+const QUESTION_IDS = [];
+QUESTIONS.forEach(s => s.items.forEach(q => { if (!q.isNote) QUESTION_IDS.push(q.id); }));
+
+function clearForm() {
+  QUESTION_IDS.forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_patient_id').value = '';
+  document.getElementById('f_enqueteur').value = '';
+  document.getElementById('f_observations').value = '';
+  document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('f_mode').value = 'Présentiel';
+  ['frustration','desir','fiabilite'].forEach(k => {
+    document.getElementById('f_'+k).value = 3;
+    document.getElementById('v_'+k).textContent = 3;
+  });
+  document.getElementById('f_betatest').value = 'Oui';
+}
+
+document.getElementById('btn-clear-form').addEventListener('click', () => {
+  if (confirm('Vider tout le formulaire en cours ?')) clearForm();
+});
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  const entry = {
+    id: 'e_' + Date.now(),
+    patient_id: document.getElementById('f_patient_id').value.trim(),
+    date: document.getElementById('f_date').value,
+    enqueteur: document.getElementById('f_enqueteur').value.trim(),
+    mode: document.getElementById('f_mode').value,
+    frustration: Number(document.getElementById('f_frustration').value),
+    desir: Number(document.getElementById('f_desir').value),
+    fiabilite: Number(document.getElementById('f_fiabilite').value),
+    betatest: document.getElementById('f_betatest').value,
+    observations: document.getElementById('f_observations').value.trim(),
+    savedAt: new Date().toISOString(),
+  };
+  QUESTION_IDS.forEach(id => entry[id] = document.getElementById(id).value.trim());
+
+  if (!entry.patient_id) {
+    showToast("Merci de renseigner un identifiant patient avant d'enregistrer.");
+    return;
+  }
+
+  const all = loadAll();
+  all.push(entry);
+  saveAll(all);
+  clearForm();
+  showToast('Entretien enregistré ✓');
+  renderDashboard();
+});
+
+// ---------- tabs ----------
+const tabForm = document.getElementById('tab-form');
+const tabDash = document.getElementById('tab-dash');
+const btnForm = document.getElementById('tab-btn-form');
+const btnDash = document.getElementById('tab-btn-dash');
+
+function showTab(which) {
+  if (which === 'form') {
+    tabForm.style.display = ''; tabDash.style.display = 'none';
+    btnForm.classList.add('active'); btnDash.classList.remove('active');
+  } else {
+    tabForm.style.display = 'none'; tabDash.style.display = '';
+    btnForm.classList.remove('active'); btnDash.classList.add('active');
+    renderDashboard();
+  }
+}
+btnForm.addEventListener('click', () => showTab('form'));
+btnDash.addEventListener('click', () => showTab('dash'));
+
+// ---------- dashboard ----------
+let chartInstance = null;
+
+function renderDashboard() {
+  const all = loadAll();
+  const n = all.length;
+
+  const avg = (key) => n ? (all.reduce((s,e) => s + (Number(e[key])||0), 0) / n) : 0;
+  const avgFrustration = avg('frustration');
+  const avgDesir = avg('desir');
+  const avgFiabilite = avg('fiabilite');
+  const pctBeta = n ? Math.round(100 * all.filter(e => e.betatest === 'Oui').length / n) : 0;
+
+  const statsRow = document.getElementById('stats-row');
+  statsRow.innerHTML = `
+    <div class="stat-card"><div class="num">${n}</div><div class="lbl">Entretiens</div></div>
+    <div class="stat-card"><div class="num">${avgFrustration.toFixed(1)}</div><div class="lbl">Frustration moy. /5</div></div>
+    <div class="stat-card"><div class="num">${avgDesir.toFixed(1)}</div><div class="lbl">Désir moy. /5</div></div>
+    <div class="stat-card"><div class="num">${pctBeta}%</div><div class="lbl">Prêts à beta-tester</div></div>
+  `;
+
+  const ctx = document.getElementById('chart-avg').getContext('2d');
+  const data = {
+    labels: ['Frustration', 'Désir spontané', 'Fiabilité perçue'],
+    datasets: [{
+      label: 'Score moyen (/5)',
+      data: [avgFrustration, avgDesir, avgFiabilite],
+      backgroundColor: ['#e8b7b2', '#a8d6cd', '#9fc6e0'],
+      borderRadius: 8,
+    }]
+  };
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data,
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { min: 0, max: 5 } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  const tableContainer = document.getElementById('table-container');
+  if (!n) {
+    tableContainer.innerHTML = "<div class=\"empty\">Aucun entretien enregistré pour l'instant. Remplis le formulaire dans l'onglet « Nouvel entretien ».</div>";
+    return;
+  }
+  const sorted = [...all].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  let rows = sorted.map(e => `
+    <tr data-id="${e.id}">
+      <td>${escapeHtml(e.patient_id)}</td>
+      <td>${escapeHtml(e.date)}</td>
+      <td>${escapeHtml(e.enqueteur)}</td>
+      <td>${e.frustration}</td>
+      <td>${e.desir}</td>
+      <td>${e.fiabilite}</td>
+      <td><span class="badge ${badgeClass(e.betatest)}">${escapeHtml(e.betatest)}</span></td>
+    </tr>
+  `).join('');
+  tableContainer.innerHTML = `
+    <table class="list">
+      <thead><tr><th>Patient</th><th>Date</th><th>Enquêteur</th><th>Frustr.</th><th>Désir</th><th>Fiab.</th><th>Beta-test</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+  tableContainer.querySelectorAll('tr[data-id]').forEach(tr => {
+    tr.addEventListener('click', () => openModal(tr.getAttribute('data-id')));
+  });
+}
+
+function badgeClass(v) {
+  if (v === 'Oui') return 'oui';
+  if (v === 'Non') return 'non';
+  return 'pe';
+}
+function escapeHtml(s) {
+  return (s || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- modal ----------
+const modalBg = document.getElementById('modal-bg');
+let currentModalId = null;
+
+function openModal(id) {
+  const all = loadAll();
+  const e = all.find(x => x.id === id);
+  if (!e) return;
+  currentModalId = id;
+  document.getElementById('modal-title').textContent = 'Entretien — ' + e.patient_id;
+  document.getElementById('modal-sub').textContent = `${e.date} · ${e.enqueteur || '—'} · ${e.mode}`;
+  let html = '';
+  QUESTIONS.forEach(section => {
+    section.items.forEach(q => {
+      if (q.isNote) return;
+      const val = e[q.id];
+      if (!val) return;
+      html += `<div class="qa"><div class="q">${escapeHtml(q.label)}</div><div class="a">${escapeHtml(val)}</div></div>`;
+    });
+  });
+  html += `<div class="qa"><div class="q">Frustration / Désir / Fiabilité</div><div class="a">${e.frustration}/5 · ${e.desir}/5 · ${e.fiabilite}/5 — Beta-test : ${e.betatest}</div></div>`;
+  if (e.observations) html += `<div class="qa"><div class="q">Observations libres</div><div class="a">${escapeHtml(e.observations)}</div></div>`;
+  document.getElementById('modal-body').innerHTML = html || '<p class="sub">Aucune réponse renseignée.</p>';
+  modalBg.classList.add('show');
+}
+document.getElementById('modal-close').addEventListener('click', () => modalBg.classList.remove('show'));
+modalBg.addEventListener('click', (ev) => { if (ev.target === modalBg) modalBg.classList.remove('show'); });
+document.getElementById('modal-delete').addEventListener('click', () => {
+  if (!currentModalId) return;
+  if (!confirm('Supprimer définitivement cet entretien ?')) return;
+  const all = loadAll().filter(x => x.id !== currentModalId);
+  saveAll(all);
+  modalBg.classList.remove('show');
+  renderDashboard();
+  showToast('Entretien supprimé');
+});
+
+document.getElementById('btn-reset-all').addEventListener('click', () => {
+  if (!confirm('Effacer TOUS les entretiens enregistrés ? Cette action est irréversible.')) return;
+  saveAll([]);
+  renderDashboard();
+  showToast('Tous les entretiens ont été effacés');
+});
+
+// ---------- CSV / Google Sheet export ----------
+function buildCsv() {
+  const all = loadAll();
+  const headers = ['patient_id','date','enqueteur','mode', ...QUESTION_IDS, 'frustration','desir','fiabilite','betatest','observations'];
+  const escCsv = (v) => {
+    const s = (v === undefined || v === null) ? '' : String(v);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+    return s;
+  };
+  const lines = [headers.join(',')];
+  all.forEach(e => {
+    lines.push(headers.map(h => escCsv(e[h])).join(','));
+  });
+  return lines.join('\n');
+}
+
+const HAS_COWORK_BRIDGE = !!(window.cowork && window.cowork.callMcpTool);
+
+// In standalone mode (hors Cowork, ex: page hébergée sur GitHub Pages), il n'y a pas
+// de pont vers le connecteur Drive : le bouton télécharge un CSV prêt à importer dans Sheets.
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btn-export-sheet');
+  if (btn && !HAS_COWORK_BRIDGE) btn.textContent = 'Exporter en CSV (à importer dans Sheets)';
+});
+
+function downloadCsvFallback(csv, title) {
+  const blob = new Blob(["﻿" + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = title.replace(/[^a-z0-9\-_ ]/gi, '') + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('btn-export-sheet').addEventListener('click', async () => {
+  const all = loadAll();
+  if (!all.length) { showToast('Aucun entretien à exporter.'); return; }
+  const btn = document.getElementById('btn-export-sheet');
+  const originalLabel = btn.textContent;
+  const csv = buildCsv();
+  const title = 'Medly - Entretiens Patients - export ' + new Date().toISOString().slice(0,16).replace('T',' ');
+
+  if (!HAS_COWORK_BRIDGE) {
+    // Mode standalone : pas de connecteur Drive disponible dans le navigateur.
+    downloadCsvFallback(csv, title);
+    showToast('CSV téléchargé — importe-le dans Google Sheets (Fichier > Importer).');
+    return;
+  }
+
+  btn.textContent = 'Export en cours...';
+  btn.disabled = true;
+  try {
+    const res = await window.cowork.callMcpTool('mcp__4463bc7d-2a46-4607-b386-d48e1fb5458d__create_file', {
+      title: title,
+      textContent: csv,
+      contentMimeType: 'text/csv'
+    });
+    if (res && res.isError) {
+      throw new Error((res.content && res.content[0] && res.content[0].text) || 'Erreur inconnue');
+    }
+    let payload = null;
+    try {
+      payload = res.structuredContent ?? JSON.parse(res.content[0].text);
+    } catch(e) { payload = null; }
+    const link = payload && (payload.webViewLink || payload.webContentLink || payload.link);
+    if (link) {
+      showToast('Google Sheet créé — ouvre-le depuis ton Drive.');
+      window.open(link, '_blank');
+    } else {
+      showToast('Google Sheet créé dans ton Drive : "' + title + '"');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("Échec de l'export : " + (err && err.message ? err.message : 'erreur inconnue'));
+  } finally {
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+  }
+});
+
+// ---------- init ----------
+renderDashboard();
+
+})();
+</script>
+</body>
+</html>
