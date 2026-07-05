@@ -492,7 +492,7 @@ function renderDashboard(all, source) {
   let rows = sorted.map(e => `
     <tr data-id="${e.id}">
       <td>${escapeHtml(e.patient_id)}</td>
-      <td>${escapeHtml(e.date)}</td>
+      <td>${escapeHtml(formatDate(e.date))}</td>
       <td>${escapeHtml(e.enqueteur)}</td>
       <td>${e.frustration}</td>
       <td>${e.desir}</td>
@@ -519,6 +519,13 @@ function badgeClass(v) {
 function escapeHtml(s) {
   return (s || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// Le Google Sheet peut renvoyer les dates comme des Date ISO complètes (ex: 2026-07-05T07:00:00.000Z)
+// selon le formatage de la cellule : on n'en garde que la partie YYYY-MM-DD pour l'affichage.
+function formatDate(d) {
+  const s = (d === undefined || d === null) ? '' : String(d);
+  const m = s.match(/^\d{4}-\d{2}-\d{2}/);
+  return m ? m[0] : s;
+}
 
 // ---------- modal ----------
 const modalBg = document.getElementById('modal-bg');
@@ -529,7 +536,7 @@ function openModal(id) {
   if (!e) return;
   currentModalId = id;
   document.getElementById('modal-title').textContent = 'Entretien — ' + e.patient_id;
-  document.getElementById('modal-sub').textContent = `${e.date} · ${e.enqueteur || '—'} · ${e.mode}`;
+  document.getElementById('modal-sub').textContent = `${formatDate(e.date)} · ${e.enqueteur || '—'} · ${e.mode}`;
   let html = '';
   QUESTIONS.forEach(section => {
     section.items.forEach(q => {
