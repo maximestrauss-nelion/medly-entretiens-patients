@@ -98,6 +98,8 @@ table.list tr:hover { background: #f7faf9; cursor: pointer; }
 .chart-wrap { height: 240px; position: relative; }
 .footer-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
 .help { font-size: 11.5px; color: #8a9c98; margin-top: 6px; }
+.source-remote { color: #157a52; font-weight: 600; }
+.source-local { color: #9a6d00; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -190,6 +192,7 @@ table.list tr:hover { background: #f7faf9; cursor: pointer; }
   <div id="tab-dash" style="display:none;">
 
     <div class="card">
+      <p class="sub" id="source-note" style="margin:0 0 12px;"></p>
       <div class="grid4" id="stats-row"></div>
     </div>
 
@@ -234,6 +237,9 @@ table.list tr:hover { background: #f7faf9; cursor: pointer; }
 (function(){
 
 const STORAGE_KEY = 'medly_entretiens_patients_v1';
+// Web App Apps Script relié au Google Sheet centralisé "Medly - Entretiens Patients (centralisé)".
+// doPost ajoute une ligne, doGet renvoie toutes les lignes en JSON. Déployé en accès "Tout le monde".
+const SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzTfkNrFi45axB-e5oSJHwrWnsF2RJqx_PaEq-KFGsuubdul7Blse2U1NH1CCVY_MpY/exec';
 
 const QUESTIONS = [
   { part: "Partie 1 — Échauffement & profil (5 min)", items: [
@@ -368,7 +374,17 @@ document.getElementById('btn-save').addEventListener('click', () => {
   saveAll(all);
   clearForm();
   showToast('Entretien enregistré ✓');
-  renderDashboard();
+
+  // Synchronisation vers le Google Sheet centralisé (best-effort, ne bloque pas la saisie).
+  if (SHEET_WEBAPP_URL) {
+    fetch(SHEET_WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(entry)
+    }).then(() => { refreshDashboard(); }).catch(() => { /* hors-ligne : reste en local, resynchronisera au prochain succès */ });
+  }
+
+  refreshDashboard();
 });
 
 // ---------- tabs ----------
@@ -384,7 +400,7 @@ function showTab(which) {
   } else {
     tabForm.style.display = 'none'; tabDash.style.display = '';
     btnForm.classList.remove('active'); btnDash.classList.add('active');
-    renderDashboard();
+    refreshDashboard();
   }
 }
 btnForm.addEventListener('click', () => showTab('form'));
@@ -392,9 +408,31 @@ btnDash.addEventListener('click', () => showTab('dash'));
 
 // ---------- dashboard ----------
 let chartInstance = null;
+let currentSource = 'local';
+let currentDashboardData = [];
 
-function renderDashboard() {
-  const all = loadAll();
+async function refreshDashboard() {
+  let all = loadAll();
+  let source = 'local';
+  if (SHEET_WEBAPP_URL) {
+    try {
+      const res = await fetch(SHEET_WEBAPP_URL, { method: 'GET' });
+      if (res.ok) {
+        const remote = await res.json();
+        if (Array.isArray(remote)) {
+          all = remote.map((r, i) => Object.assign({ id: 'r_' + i }, r));
+          source = 'remote';
+        }
+      }
+    } catch (err) { /* hors-ligne ou CORS : on reste sur les données locales */ }
+  }
+  currentSource = source;
+  renderDashboard(all, source);
+}
+
+function renderDashboard(all, source) {
+  all = all || loadAll();
+  source = source || 'local';
   const n = all.length;
 
   const avg = (key) => n ? (all.reduce((s,e) => s + (Number(e[key])||0), 0) / n) : 0;
@@ -402,6 +440,17 @@ function renderDashboard() {
   const avgDesir = avg('desir');
   const avgFiabilite = avg('fiabilite');
   const pctBeta = n ? Math.round(100 * all.filter(e => e.betatest === 'Oui').length / n) : 0;
+
+  const sourceNote = document.getElementById('source-note');
+  if (sourceNote) {
+    sourceNote.textContent = source === 'remote'
+      ? 'Données du Google Sheet partagé — vues depuis tous les appareils.'
+      : 'Hors-ligne : affichage des données locales de cet appareil uniquement.';
+    sourceNote.className = source === 'remote' ? 'sub source-remote' : 'sub source-local';
+  }
+
+  const resetBtn = document.getElementById('btn-reset-all');
+  if (resetBtn) resetBtn.style.display = (source === 'remote') ? 'none' : '';
 
   const statsRow = document.getElementById('stats-row');
   statsRow.innerHTML = `
@@ -431,6 +480,8 @@ function renderDashboard() {
       plugins: { legend: { display: false } }
     }
   });
+
+  currentDashboardData = all;
 
   const tableContainer = document.getElementById('table-container');
   if (!n) {
@@ -474,8 +525,7 @@ const modalBg = document.getElementById('modal-bg');
 let currentModalId = null;
 
 function openModal(id) {
-  const all = loadAll();
-  const e = all.find(x => x.id === id);
+  const e = currentDashboardData.find(x => String(x.id) === String(id));
   if (!e) return;
   currentModalId = id;
   document.getElementById('modal-title').textContent = 'Entretien — ' + e.patient_id;
@@ -492,25 +542,31 @@ function openModal(id) {
   html += `<div class="qa"><div class="q">Frustration / Désir / Fiabilité</div><div class="a">${e.frustration}/5 · ${e.desir}/5 · ${e.fiabilite}/5 — Beta-test : ${e.betatest}</div></div>`;
   if (e.observations) html += `<div class="qa"><div class="q">Observations libres</div><div class="a">${escapeHtml(e.observations)}</div></div>`;
   document.getElementById('modal-body').innerHTML = html || '<p class="sub">Aucune réponse renseignée.</p>';
+  document.getElementById('modal-delete').style.display = (currentSource === 'remote') ? 'none' : '';
   modalBg.classList.add('show');
 }
 document.getElementById('modal-close').addEventListener('click', () => modalBg.classList.remove('show'));
 modalBg.addEventListener('click', (ev) => { if (ev.target === modalBg) modalBg.classList.remove('show'); });
 document.getElementById('modal-delete').addEventListener('click', () => {
   if (!currentModalId) return;
+  if (currentSource === 'remote') {
+    showToast('Pour supprimer une ligne synchronisée, édite directement le Google Sheet.');
+    return;
+  }
   if (!confirm('Supprimer définitivement cet entretien ?')) return;
   const all = loadAll().filter(x => x.id !== currentModalId);
   saveAll(all);
   modalBg.classList.remove('show');
-  renderDashboard();
+  refreshDashboard();
   showToast('Entretien supprimé');
 });
 
 document.getElementById('btn-reset-all').addEventListener('click', () => {
-  if (!confirm('Effacer TOUS les entretiens enregistrés ? Cette action est irréversible.')) return;
+  if (currentSource === 'remote') return;
+  if (!confirm('Effacer TOUS les entretiens enregistrés localement ? Cette action est irréversible.')) return;
   saveAll([]);
-  renderDashboard();
-  showToast('Tous les entretiens ont été effacés');
+  refreshDashboard();
+  showToast('Tous les entretiens locaux ont été effacés');
 });
 
 // ---------- CSV / Google Sheet export ----------
@@ -597,7 +653,7 @@ document.getElementById('btn-export-sheet').addEventListener('click', async () =
 });
 
 // ---------- init ----------
-renderDashboard();
+refreshDashboard();
 
 })();
 </script>
