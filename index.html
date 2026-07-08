@@ -330,9 +330,35 @@ function showToast(msg) {
 const QUESTION_IDS = [];
 QUESTIONS.forEach(s => s.items.forEach(q => { if (!q.isNote) QUESTION_IDS.push(q.id); }));
 
+// ---------- identifiant patient auto-incrémenté ----------
+// Cherche le plus grand numéro déjà utilisé (format "P-014") dans les données connues
+// (Sheet partagé si synchronisé, sinon cache local) et propose le suivant.
+let patientIdIsAuto = true;
+
+function nextPatientId(list) {
+  let max = 0;
+  const re = /^P-(\d+)$/i;
+  (list || []).forEach(e => {
+    const m = re.exec((e.patient_id || '').toString().trim());
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  });
+  return 'P-' + String(max + 1).padStart(3, '0');
+}
+
+function autofillPatientId() {
+  if (!patientIdIsAuto) return;
+  const field = document.getElementById('f_patient_id');
+  if (field) field.value = nextPatientId(currentDashboardData);
+}
+
 function clearForm() {
   QUESTION_IDS.forEach(id => document.getElementById(id).value = '');
+  patientIdIsAuto = true;
   document.getElementById('f_patient_id').value = '';
+  autofillPatientId();
   document.getElementById('f_enqueteur').value = '';
   document.getElementById('f_observations').value = '';
   document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
@@ -347,6 +373,9 @@ function clearForm() {
 document.getElementById('btn-clear-form').addEventListener('click', () => {
   if (confirm('Vider tout le formulaire en cours ?')) clearForm();
 });
+
+// Si l'utilisateur retouche manuellement l'identifiant, on arrête de l'écraser automatiquement.
+document.getElementById('f_patient_id').addEventListener('input', () => { patientIdIsAuto = false; });
 
 document.getElementById('btn-save').addEventListener('click', () => {
   const entry = {
@@ -372,6 +401,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
   const all = loadAll();
   all.push(entry);
   saveAll(all);
+  currentDashboardData = all; // pour que le prochain identifiant proposé tienne compte de cet entretien
   clearForm();
   showToast('Entretien enregistré ✓');
 
@@ -397,6 +427,7 @@ function showTab(which) {
   if (which === 'form') {
     tabForm.style.display = ''; tabDash.style.display = 'none';
     btnForm.classList.add('active'); btnDash.classList.remove('active');
+    refreshDashboard(); // rafraîchit aussi le prochain identifiant proposé (cas multi-appareils)
   } else {
     tabForm.style.display = 'none'; tabDash.style.display = '';
     btnForm.classList.remove('active'); btnDash.classList.add('active');
@@ -428,6 +459,7 @@ async function refreshDashboard() {
   }
   currentSource = source;
   renderDashboard(all, source);
+  autofillPatientId();
 }
 
 function renderDashboard(all, source) {
