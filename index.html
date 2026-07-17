@@ -225,6 +225,7 @@ table.list tr:hover { background: #f7faf9; cursor: pointer; }
     <p class="sub" id="modal-sub"></p>
     <div id="modal-body"></div>
     <div class="modal-actions">
+      <button class="secondary" id="modal-notion">Enregistrer sur Notion</button>
       <button class="danger" id="modal-delete">Supprimer cet entretien</button>
       <button class="secondary" id="modal-close">Fermer</button>
     </div>
@@ -562,11 +563,16 @@ function formatDate(d) {
 // ---------- modal ----------
 const modalBg = document.getElementById('modal-bg');
 let currentModalId = null;
+let currentModalEntry = null;
+
+// Page Notion dédiée : "🗃️ Suivi centralisé des entretiens patients" (sous MEDLY > 📊 Marché & Terrain)
+const NOTION_PARENT_PAGE_ID = '39e35f6137ad81e59642e47c10520eea';
 
 function openModal(id) {
   const e = currentDashboardData.find(x => String(x.id) === String(id));
   if (!e) return;
   currentModalId = id;
+  currentModalEntry = e;
   document.getElementById('modal-title').textContent = 'Entretien — ' + e.patient_id;
   document.getElementById('modal-sub').textContent = `${formatDate(e.date)} · ${e.enqueteur || '—'} · ${e.mode}`;
   let html = '';
@@ -582,8 +588,91 @@ function openModal(id) {
   if (e.observations) html += `<div class="qa"><div class="q">Observations libres</div><div class="a">${escapeHtml(e.observations)}</div></div>`;
   document.getElementById('modal-body').innerHTML = html || '<p class="sub">Aucune réponse renseignée.</p>';
   document.getElementById('modal-delete').style.display = (currentSource === 'remote') ? 'none' : '';
+  const notionBtn = document.getElementById('modal-notion');
+  notionBtn.textContent = 'Enregistrer sur Notion';
+  notionBtn.disabled = false;
   modalBg.classList.add('show');
 }
+
+// ---------- résumé Notion ----------
+function buildNotionSummary(e) {
+  let md = `**Enquêteur :** ${e.enqueteur || '—'}  \n**Mode :** ${e.mode || '—'}  \n**Date :** ${formatDate(e.date) || '—'}\n\n`;
+  md += `## Grille de clôture\n`;
+  md += `- Niveau de frustration avec la gestion actuelle : **${e.frustration}/5**\n`;
+  md += `- Désir spontané de l'application : **${e.desir}/5**\n`;
+  md += `- Fiabilité perçue des données : **${e.fiabilite}/5**\n`;
+  md += `- Disposé(e) à être bêta-testeur : **${e.betatest || '—'}**\n\n`;
+
+  QUESTIONS.forEach(section => {
+    const answered = section.items.filter(q => !q.isNote && e[q.id]);
+    if (!answered.length) return;
+    md += `## ${section.part}\n`;
+    answered.forEach(q => {
+      md += `**${q.label}**\n${e[q.id]}\n\n`;
+    });
+  });
+
+  if (e.observations) {
+    md += `## Observations libres\n${e.observations}\n`;
+  }
+  return md;
+}
+
+const NOTION_PAGE_URL = 'https://app.notion.com/p/39e35f6137ad81e59642e47c10520eea';
+
+document.getElementById('modal-notion').addEventListener('click', async () => {
+  if (!currentModalEntry) return;
+  const btn = document.getElementById('modal-notion');
+  const original = btn.textContent;
+  const e = currentModalEntry;
+  const title = `Entretien — ${e.patient_id || 'sans ID'} (${formatDate(e.date) || 'date inconnue'})`;
+
+  // Mode standalone (hors Cowork) : pas de pont vers le connecteur Notion dans le navigateur.
+  // On copie le résumé formaté dans le presse-papiers et on ouvre la page Notion dédiée pour le coller.
+  if (typeof HAS_COWORK_BRIDGE !== 'undefined' && !HAS_COWORK_BRIDGE) {
+    const text = `${title}\n\n${buildNotionSummary(e)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Résumé copié — colle-le dans la page Notion qui vient de s'ouvrir.");
+    } catch (err) {
+      showToast("Impossible de copier automatiquement : sélectionne et copie le résumé manuellement.");
+    }
+    window.open(NOTION_PAGE_URL, '_blank');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement...';
+  try {
+    const res = await window.cowork.callMcpTool('mcp__537ca20d-ada4-4e62-8f1c-cfd91406b2a8__notion-create-pages', {
+      parent: { type: 'page_id', page_id: NOTION_PARENT_PAGE_ID },
+      pages: [{
+        properties: { title },
+        content: buildNotionSummary(e),
+        icon: '🗒️'
+      }]
+    });
+    if (res && res.isError) {
+      throw new Error((res.content && res.content[0] && res.content[0].text) || 'Erreur inconnue');
+    }
+    let payload = null;
+    try { payload = res.structuredContent ?? JSON.parse(res.content[0].text); } catch(err) { payload = null; }
+    const page = payload && payload.pages && payload.pages[0];
+    if (page && page.url) {
+      showToast('Résumé enregistré sur Notion ✓');
+      window.open(page.url, '_blank');
+    } else {
+      showToast('Résumé enregistré sur Notion ✓');
+    }
+    btn.textContent = 'Enregistré ✓ (cliquer pour dupliquer)';
+    btn.disabled = false;
+  } catch (err) {
+    console.error(err);
+    showToast("Échec de l'enregistrement Notion : " + (err && err.message ? err.message : 'erreur inconnue'));
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
 document.getElementById('modal-close').addEventListener('click', () => modalBg.classList.remove('show'));
 modalBg.addEventListener('click', (ev) => { if (ev.target === modalBg) modalBg.classList.remove('show'); });
 document.getElementById('modal-delete').addEventListener('click', () => {
